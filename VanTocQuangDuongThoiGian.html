@@ -24,7 +24,21 @@
             z-index: 0;
             animation: fall linear infinite;
         }
+.top-card {
+    padding: 10px;
+    border-radius: 16px;
+    text-align: center;
+    animation: popUp 0.6s ease;
+}
 
+@keyframes popUp {
+    0% { transform: translateY(30px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+
+.gold { background: #ffd700; }
+.silver { background: #c0c0c0; }
+.bronze { background: #cd7f32; }
         @keyframes fall {
             to {
                 transform: translateY(110vh) rotate(360deg);
@@ -167,7 +181,8 @@
             </button>
             <div class="mt-6">
     <h3 class="text-xl font-bold mb-3">🏆 Bảng xếp hạng</h3>
-    <ul id="leaderboard" class="text-left space-y-2"></ul>
+    <div id="top3" class="flex justify-center items-end gap-4 mb-6"></div>
+<ul id="leaderboard" class="text-left space-y-2"></ul>
 </div>
 
             <div class="mt-8 text-sm text-gray-400">Được tạo bởi Cô Nguyên - THCS Tam Giang</div>
@@ -396,6 +411,10 @@
             const finalScore = (score * 0.5).toFixed(1);
             const timeStr = document.getElementById('timer').innerText;
 
+            // CHUYỂN sang giây
+            const [m, s] = timeStr.split(":").map(Number);
+            const timeInSeconds = m * 60 + s;
+
             document.getElementById('final-name').innerText = playerName;
             document.getElementById('final-score').innerText = finalScore;
             document.getElementById('final-correct').innerText = score;
@@ -410,7 +429,7 @@
             } else {
                 document.getElementById('result-emoji').innerText = "💪";
             }
-            saveScore(playerName, score, timeStr);
+            saveScore(playerName, score, timeStr, timeInSeconds);
             loadLeaderboard();
         }
 
@@ -450,35 +469,103 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // Lưu điểm
-async function saveScore(name, score, time) {
+import { getDocs, where, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+async function saveScore(name, score, time, timeInSeconds) {
+
+    const q = query(collection(db, "leaderboard"), where("name", "==", name));
+    const snapshot = await getDocs(q);
+
+    let shouldSave = true;
+    let docsToDelete = [];
+
+    snapshot.forEach(docItem => {
+        const old = docItem.data();
+
+        // Nếu điểm cũ tốt hơn → không lưu
+        if (old.score > score) {
+            shouldSave = false;
+        }
+
+        // Nếu bằng điểm nhưng thời gian cũ nhanh hơn → không lưu
+        if (old.score === score && old.timeInSeconds < timeInSeconds) {
+            shouldSave = false;
+        }
+
+        // Nếu điểm mới tốt hơn → đánh dấu xóa bản cũ
+        if (score > old.score || 
+           (score === old.score && timeInSeconds < old.timeInSeconds)) {
+            docsToDelete.push(docItem.id);
+        }
+    });
+
+    if (!shouldSave) return;
+
+    // 🔥 XÓA BẢN CŨ
+    for (let id of docsToDelete) {
+        await deleteDoc(doc(db, "leaderboard", id));
+    }
+
+    // 🔥 LƯU BẢN MỚI
     await addDoc(collection(db, "leaderboard"), {
         name,
         score,
         time,
+        timeInSeconds,
         createdAt: new Date()
     });
 }
 
 // Load bảng xếp hạng realtime
 function loadLeaderboard() {
-    const q = query(collection(db, "leaderboard"), orderBy("score", "desc"), limit(10));
+    const q = query(
+        collection(db, "leaderboard"),
+        orderBy("score", "desc"),
+        orderBy("timeInSeconds", "asc"),
+        limit(10)
+    );
 
     onSnapshot(q, (snapshot) => {
         const list = document.getElementById("leaderboard");
-        list.innerHTML = "";
+        const top3Div = document.getElementById("top3");
 
-        let rank = 1;
+        list.innerHTML = "";
+        top3Div.innerHTML = "";
+
+        let dataArr = [];
+
         snapshot.forEach(doc => {
-            const d = doc.data();
-            let medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "";
+            dataArr.push(doc.data());
+        });
+
+        // 🔥 TOP 3
+        const medals = ["🥇", "🥈", "🥉"];
+        const classes = ["gold", "silver", "bronze"];
+
+        dataArr.slice(0, 3).forEach((d, i) => {
+            const div = document.createElement("div");
+            div.className = `top-card ${classes[i]}`;
+
+            div.innerHTML = `
+                <div class="text-2xl">${medals[i]}</div>
+                <div class="font-bold">${d.name}</div>
+                <div>${d.score} điểm</div>
+                <div class="text-sm">⏱ ${d.time}</div>
+            `;
+
+            top3Div.appendChild(div);
+        });
+
+        // 🔥 TOP 4 → 10
+        let rank = 4;
+        dataArr.slice(3).forEach(d => {
             const li = document.createElement("li");
-            li.innerHTML = `${medal} ${rank}. <b>${d.name}</b> - ${d.score} điểm (${d.time})`;
+            li.innerHTML = `${rank}. <b>${d.name}</b> - ${d.score} điểm (${d.time})`;
             list.appendChild(li);
             rank++;
         });
     });
 }
-
 // Cho phép gọi từ script cũ
 window.saveScore = saveScore;
 window.loadLeaderboard = loadLeaderboard;
