@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Đường đua Toán học - Cô Nguyên</title>
+    <title>Đường đua Toán học </title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
@@ -40,15 +40,28 @@
         }
 
         .btn-answer {
-            transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: all 0.2s ease;
             border: 2px solid #f3e5f5;
+            position: relative;
+            overflow: hidden;
         }
 
-        .btn-answer:hover {
-            transform: translateY(-3px) scale(1.02);
+        .btn-answer:not(:disabled):hover {
+            transform: translateY(-3px);
             background-color: #fce4ec;
             border-color: #f06292;
-            box-shadow: 0 5px 15px rgba(240, 98, 146, 0.2);
+        }
+
+        .btn-correct {
+            background-color: #c8e6c9 !important;
+            border-color: #4caf50 !important;
+            color: #2e7d32 !important;
+        }
+
+        .btn-wrong {
+            background-color: #ffcdd2 !important;
+            border-color: #f44336 !important;
+            color: #c62828 !important;
         }
 
         .progress-bar {
@@ -65,6 +78,18 @@
             background: linear-gradient(to right, #d81b60, #8e24aa);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+        }
+
+        .feedback-icon {
+            position: absolute;
+            right: 15px;
+            font-size: 1.5rem;
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
         }
     </style>
 </head>
@@ -99,7 +124,7 @@
                     Câu: <span id="current-index">1</span>/20
                 </div>
                 <div class="flex items-center gap-4">
-                    <button onclick="toggleMusic()" id="music-btn" class="text-2xl transition-transform hover:scale-110">🔊</button>
+                    <button onclick="toggleMusic()" id="music-btn" class="text-2xl transition-transform hover:scale-110">🔇</button>
                     <div id="timer" class="text-xl font-mono font-bold text-purple-700 bg-purple-50 px-3 py-1 rounded-lg">00:00</div>
                 </div>
             </div>
@@ -108,12 +133,12 @@
                 <div id="progress" class="progress-bar h-full w-0"></div>
             </div>
 
-            <div class="bg-gradient-to-br from-pink-50 to-purple-50 p-6 rounded-3xl mb-6 min-h-[120px] flex items-center justify-center text-center shadow-inner border border-white">
+            <div class="bg-gradient-to-br from-pink-50 to-purple-50 p-6 rounded-3xl mb-6 min-h-[120px] flex items-center justify-center text-center shadow-inner border border-white relative">
                 <h2 id="question-text" class="text-xl md:text-2xl font-bold text-gray-800 leading-relaxed"></h2>
             </div>
 
             <div id="answers-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <!-- Đáp án sẽ được chèn ở đây -->
+                <!-- Đáp án chèn ở đây -->
             </div>
 
             <div class="text-center italic text-pink-600 font-bold mb-6 flex items-center justify-center gap-2">
@@ -129,7 +154,7 @@
         <!-- Màn hình kết quả -->
         <div id="result-screen" class="glass-card p-8 text-center hidden">
             <h2 class="text-3xl font-bold text-gradient mb-4">CHÚC MỪNG CHIẾN THẮNG! 🎉</h2>
-            <div class="text-7xl mb-6 animate-bounce">🏆</div>
+            <div class="text-7xl mb-6 animate-bounce" id="result-emoji">🏆</div>
             <div class="space-y-4 text-xl text-gray-700 mb-8 bg-pink-50 p-6 rounded-2xl">
                 <p>Học sinh: <span id="final-name" class="font-bold text-pink-600"></span></p>
                 <p>Số điểm: <span id="final-score" class="font-bold text-red-500 text-3xl"></span>/10</p>
@@ -145,10 +170,11 @@
         </div>
     </div>
 
-    <!-- Audio Placeholder -->
-    <audio id="bg-music" loop>
-        <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
-    </audio>
+    <!-- Âm thanh -->
+    <audio id="bg-music" loop><source src="https://assets.mixkit.co/music/preview/mixkit-funny-times-607.mp3" type="audio/mpeg"></audio>
+    <audio id="sound-correct"><source src="https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3" type="audio/mpeg"></audio>
+    <audio id="sound-wrong"><source src="https://assets.mixkit.co/active_storage/sfx/2004/2004-preview.mp3" type="audio/mpeg"></audio>
+    <audio id="sound-finish"><source src="https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3" type="audio/mpeg"></audio>
 
     <script>
         const SLOGANS = [
@@ -230,8 +256,8 @@
         let timerInterval;
         let isMusicPlaying = false;
         let playerName = "";
+        let isWaiting = false;
 
-        // Tạo hiệu ứng sao rơi
         function createStars() {
             const container = document.getElementById('stars-container');
             for (let i = 0; i < 35; i++) {
@@ -265,7 +291,6 @@
             const vd = shuffle([...KHO_DE.van_dung]).slice(0, 8);
             
             currentQuestions = shuffle([...nb, ...th, ...vd]);
-            
             currentIndex = 0;
             score = 0;
             startTime = new Date();
@@ -276,9 +301,10 @@
             startTimer();
             showQuestion();
             
-            const music = document.getElementById('bg-music');
-            music.volume = 0.3;
-            if (isMusicPlaying) music.play();
+            if (isMusicPlaying) {
+                const music = document.getElementById('bg-music');
+                music.play().catch(() => {});
+            }
         }
 
         function startTimer() {
@@ -292,34 +318,64 @@
         }
 
         function showQuestion() {
+            isWaiting = false;
             const q = currentQuestions[currentIndex];
             document.getElementById('current-index').innerText = currentIndex + 1;
             document.getElementById('question-text').innerText = q.q;
             document.getElementById('progress').style.width = `${(currentIndex / 20) * 100}%`;
-
-            // Thay đổi slogan ngẫu nhiên mỗi câu hỏi
             document.getElementById('dynamic-slogan').innerText = `"${SLOGANS[Math.floor(Math.random() * SLOGANS.length)]}"`;
 
             const answersGrid = document.getElementById('answers-grid');
             answersGrid.innerHTML = '';
 
             const correctText = q.a[q.c];
-            const shuffledAnswers = shuffle([...q.a]);
+            const displayAnswers = shuffle([...q.a]);
 
-            shuffledAnswers.forEach((ans, idx) => {
+            displayAnswers.forEach((ans, idx) => {
                 const btn = document.createElement('button');
-                btn.className = "btn-answer bg-white p-4 rounded-2xl text-lg font-semibold text-gray-700 text-left flex items-center gap-3";
-                btn.innerHTML = `<span class="bg-pink-100 text-pink-600 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow-sm">${String.fromCharCode(65 + idx)}</span> ${ans}`;
-                btn.onclick = () => checkAnswer(ans, correctText);
+                btn.className = "btn-answer bg-white p-4 rounded-2xl text-lg font-semibold text-gray-700 text-left flex items-center gap-3 w-full";
+                btn.innerHTML = `<span class="bg-pink-100 text-pink-600 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow-sm flex-shrink-0">${String.fromCharCode(65 + idx)}</span> <span class="flex-grow">${ans}</span>`;
+                btn.onclick = () => checkAnswer(btn, ans, correctText);
                 answersGrid.appendChild(btn);
             });
         }
 
-        function checkAnswer(selected, correct) {
+        function checkAnswer(btn, selected, correct) {
+            if (isWaiting) return;
+            isWaiting = true;
+
+            const allBtns = document.querySelectorAll('.btn-answer');
+            allBtns.forEach(b => b.disabled = true);
+
             if (selected === correct) {
+                // ĐÚNG
                 score++;
+                btn.classList.add('btn-correct');
+                btn.innerHTML += `<span class="feedback-icon">😊</span>`;
+                document.getElementById('sound-correct').play();
+                
+                // Chuyển câu ngay sau 0.6s để thấy hiệu ứng
+                setTimeout(nextStep, 600);
+            } else {
+                // SAI
+                btn.classList.add('btn-wrong');
+                btn.innerHTML += `<span class="feedback-icon">😟</span>`;
+                
+                // Hiển thị đáp án đúng
+                allBtns.forEach(b => {
+                    if (b.innerText.includes(correct)) {
+                        b.classList.add('btn-correct');
+                    }
+                });
+                
+                document.getElementById('sound-wrong').play();
+                
+                // Dừng 3 giây cho học sinh xem
+                setTimeout(nextStep, 3000);
             }
-            
+        }
+
+        function nextStep() {
             currentIndex++;
             if (currentIndex < 20) {
                 showQuestion();
@@ -340,6 +396,16 @@
             document.getElementById('final-score').innerText = finalScore;
             document.getElementById('final-correct').innerText = score;
             document.getElementById('final-time').innerText = timeStr;
+            
+            document.getElementById('sound-finish').play();
+            
+            if (score >= 16) {
+                document.getElementById('result-emoji').innerText = "🏆";
+            } else if (score >= 10) {
+                document.getElementById('result-emoji').innerText = "⭐";
+            } else {
+                document.getElementById('result-emoji').innerText = "💪";
+            }
         }
 
         function toggleMusic() {
@@ -357,7 +423,6 @@
 
         window.onload = function() {
             createStars();
-            // Đặt slogan khởi đầu ngẫu nhiên
             document.getElementById('start-slogan').innerText = `"${SLOGANS[Math.floor(Math.random() * SLOGANS.length)]}"`;
         };
     </script>
