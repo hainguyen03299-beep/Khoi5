@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đường đua Toán học - Cô Nguyên</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Quicksand', sans-serif;
+            background: linear-gradient(135deg, #fce4ec 0%, #f3e5f5 100%);
+            overflow-x: hidden;
+            margin: 0;
+            user-select: none;
+        }
+
+        .star {
+            position: fixed;
+            top: -10%;
+            color: #ba68c8;
+            font-size: 20px;
+            pointer-events: none;
+            z-index: 0;
+            animation: fall linear infinite;
+        }
+
+        @keyframes fall {
+            to {
+                transform: translateY(110vh) rotate(360deg);
+            }
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            border-radius: 28px;
+            box-shadow: 0 10px 40px rgba(186, 104, 200, 0.15);
+            border: 2px solid #f8bbd0;
+        }
+
+        .btn-answer {
+            transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 2px solid #f3e5f5;
+        }
+
+        .btn-answer:hover {
+            transform: translateY(-3px) scale(1.02);
+            background-color: #fce4ec;
+            border-color: #f06292;
+            box-shadow: 0 5px 15px rgba(240, 98, 146, 0.2);
+        }
+
+        .progress-bar {
+            transition: width 0.4s ease;
+            background: linear-gradient(90deg, #f06292, #ba68c8);
+        }
+
+        #game-container {
+            z-index: 10;
+            position: relative;
+        }
+
+        .text-gradient {
+            background: linear-gradient(to right, #d81b60, #8e24aa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div id="stars-container"></div>
+
+    <div id="game-container" class="w-full max-w-2xl">
+        <!-- Màn hình bắt đầu -->
+        <div id="start-screen" class="glass-card p-8 text-center">
+            <h1 class="text-4xl font-bold text-gradient mb-6">🏁 ĐƯỜNG ĐUA TOÁN HỌC 🏁</h1>
+            <p class="text-gray-600 mb-8 font-medium">Chào mừng em đến với đường đua kỳ thú của sắc màu!</p>
+            
+            <div class="mb-6">
+                <input type="text" id="student-name" placeholder="Nhập họ và tên của em..." 
+                    class="w-full p-4 rounded-2xl border-2 border-pink-100 outline-none focus:border-pink-400 text-lg text-center transition-colors">
+            </div>
+
+            <button onclick="startGame()" class="bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white font-bold py-4 px-12 rounded-full text-xl shadow-xl transform transition-transform hover:scale-105 active:scale-95">
+                BẮT ĐẦU CHƠI 🚀
+            </button>
+
+            <div class="mt-8 pt-6 border-t border-pink-100 italic text-pink-600 font-semibold" id="start-slogan">
+                "Mỗi bước đi nhỏ sẽ dẫn tới thành công lớn"
+            </div>
+            <div class="mt-2 text-sm text-gray-400">Được tạo bởi Cô Nguyên - THCS Tam Giang</div>
+        </div>
+
+        <!-- Màn hình chơi game -->
+        <div id="quiz-screen" class="glass-card p-6 hidden">
+            <div class="flex justify-between items-center mb-4">
+                <div class="bg-pink-100 px-4 py-2 rounded-xl text-pink-800 font-bold shadow-sm">
+                    Câu: <span id="current-index">1</span>/20
+                </div>
+                <div class="flex items-center gap-4">
+                    <button onclick="toggleMusic()" id="music-btn" class="text-2xl transition-transform hover:scale-110">🔊</button>
+                    <div id="timer" class="text-xl font-mono font-bold text-purple-700 bg-purple-50 px-3 py-1 rounded-lg">00:00</div>
+                </div>
+            </div>
+
+            <div class="w-full bg-gray-100 h-3 rounded-full mb-6 overflow-hidden border border-pink-50">
+                <div id="progress" class="progress-bar h-full w-0"></div>
+            </div>
+
+            <div class="bg-gradient-to-br from-pink-50 to-purple-50 p-6 rounded-3xl mb-6 min-h-[120px] flex items-center justify-center text-center shadow-inner border border-white">
+                <h2 id="question-text" class="text-xl md:text-2xl font-bold text-gray-800 leading-relaxed"></h2>
+            </div>
+
+            <div id="answers-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <!-- Đáp án sẽ được chèn ở đây -->
+            </div>
+
+            <div class="text-center italic text-pink-600 font-bold mb-6 flex items-center justify-center gap-2">
+                Cố lên nhé <span id="display-name" class="underline">em</span>! <span class="text-2xl">💪🔥</span>
+            </div>
+
+            <div class="text-center border-t border-pink-50 pt-4">
+                <p id="dynamic-slogan" class="text-sm text-gray-500 italic font-medium">"Học tập là chìa khóa mở cửa tương lai"</p>
+                <p class="text-xs text-gray-400 mt-1">Được tạo bởi Cô Nguyên - THCS Tam Giang</p>
+            </div>
+        </div>
+
+        <!-- Màn hình kết quả -->
+        <div id="result-screen" class="glass-card p-8 text-center hidden">
+            <h2 class="text-3xl font-bold text-gradient mb-4">CHÚC MỪNG CHIẾN THẮNG! 🎉</h2>
+            <div class="text-7xl mb-6 animate-bounce">🏆</div>
+            <div class="space-y-4 text-xl text-gray-700 mb-8 bg-pink-50 p-6 rounded-2xl">
+                <p>Học sinh: <span id="final-name" class="font-bold text-pink-600"></span></p>
+                <p>Số điểm: <span id="final-score" class="font-bold text-red-500 text-3xl"></span>/10</p>
+                <p>Số câu đúng: <span id="final-correct" class="font-bold"></span>/20</p>
+                <p>Thời gian: <span id="final-time" class="font-bold text-purple-600"></span></p>
+            </div>
+
+            <button onclick="location.reload()" class="bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white font-bold py-4 px-10 rounded-full shadow-lg transition-all transform hover:scale-105">
+                CHƠI LẠI LƯỢT MỚI
+            </button>
+
+            <div class="mt-8 text-sm text-gray-400">Được tạo bởi Cô Nguyên - THCS Tam Giang</div>
+        </div>
+    </div>
+
+    <!-- Audio Placeholder -->
+    <audio id="bg-music" loop>
+        <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        const SLOGANS = [
+            "Học tập là chìa khóa mở cửa tương lai",
+            "Mỗi bước đi nhỏ sẽ dẫn tới thành công lớn",
+            "Đừng ngại đặt câu hỏi, đó là khởi đầu của trí tuệ",
+            "Khai phá tri thức, chinh phục ước mơ",
+            "Kiên trì là mẹ của thành công",
+            "Hôm nay em nỗ lực, ngày mai em tỏa sáng",
+            "Sách là người thầy không bao giờ biết mệt mỏi",
+            "Hãy là phiên bản tốt hơn của chính mình mỗi ngày",
+            "Toán học là ngôn ngữ của vũ trụ",
+            "Tự tin là một nửa của chiến thắng"
+        ];
+
+        const KHO_DE = {
+            nhan_biet: [
+                { q: "Vận tốc là gì?", a: ["Quãng đường đi được", "Thời gian đi", "Quãng đường đi được trong một đơn vị thời gian", "Số giờ đi"], c: 2 },
+                { q: "Công thức tính vận tốc là:", a: ["v = s × t", "v = s : t", "v = t : s", "v = s + t"], c: 1 },
+                { q: "Công thức tính quãng đường là:", a: ["s = v × t", "s = v : t", "s = t : v", "s = v + t"], c: 0 },
+                { q: "Công thức tính thời gian là:", a: ["t = s × v", "t = s : v", "v = : s", "t = s + v"], c: 1 },
+                { q: "Đơn vị của vận tốc thường là:", a: ["km", "giờ", "km/giờ", "mét"], c: 2 },
+                { q: "Đơn vị của quãng đường là:", a: ["km", "giờ", "km/giờ", "phút"], c: 0 },
+                { q: "Đơn vị của thời gian là:", a: ["km", "giờ", "km/giờ", "mét"], c: 1 },
+                { q: "Một xe đi với vận tốc 40 km/giờ nghĩa là:", a: ["Đi 40 km trong 1 giờ", "Đi 1 km trong 40 giờ", "Đi 40 km trong 40 giờ", "Đi 1 giờ trong 40 km"], c: 0 },
+                { q: "Nếu biết vận tốc và thời gian, ta tính được:", a: ["Quãng đường", "Thời gian", "Vận tốc", "Không tính được"], c: 0 },
+                { q: "Nếu biết quãng đường và thời gian, ta tính được:", a: ["Vận tốc", "Thời gian", "Quãng đường", "Không tính được"], c: 0 },
+                { q: "Nếu biết quãng đường và vận tốc, ta tính được:", a: ["Thời gian", "Quãng đường", "Vận tốc", "Không tính được"], c: 0 },
+                { q: "Một giờ bằng bao nhiêu phút?", a: ["30 phút", "60 phút", "90 phút", "100 phút"], c: 1 },
+                { q: "Một km bằng bao nhiêu mét?", a: ["10 m", "100 m", "1000 m", "10000 m"], c: 2 },
+                { q: "2 giờ bằng bao nhiêu phút?", a: ["60 phút", "90 phút", "120 phút", "180 phút"], c: 2 },
+                { q: "30 phút bằng bao nhiêu giờ?", a: ["0,5 giờ", "1 giờ", "2 giờ", "0,3 giờ"], c: 0 },
+                { q: "Khi vận tốc tăng, thời gian không đổi thì quãng đường:", a: ["Giảm", "Tăng", "Không đổi", "Không biết"], c: 1 },
+                { q: "Khi thời gian tăng, vận tốc không đổi thì quãng đường:", a: ["Tăng", "Giảm", "Không đổi", "Không biết"], c: 0 },
+                { q: "3 giờ bằng bao nhiêu phút?", a: ["120 phút", "150 phút", "180 phút", "200 phút"], c: 2 },
+                { q: "1,5 giờ bằng bao nhiêu phút?", a: ["60 phút", "90 phút", "120 phút", "150 phút"], c: 1 },
+                { q: "1 giờ 30 phút bằng:", a: ["1,3 giờ", "1,5 giờ", "1,8 giờ", "2 giờ"], c: 1 }
+            ],
+            thong_hieu: [
+                { q: "Xe chạy 50 km/giờ trong 1 giờ thì đi được:", a: ["50 km", "1 km", "5 km", "100 km"], c: 0 },
+                { q: "Xe chạy 60 km/giờ trong 2 giờ thì đi được:", a: ["60 km", "120 km", "30 km", "180 km"], c: 1 },
+                { q: "Một người đi 10 km trong 2 giờ, vận tốc là:", a: ["5 km/giờ", "10 km/giờ", "20 km/giờ", "2 km/giờ"], c: 0 },
+                { q: "Một xe đi 100 km với vận tốc 50 km/giờ, thời gian là:", a: ["1 giờ", "2 giờ", "3 giờ", "4 giờ"], c: 1 },
+                { q: "Khi quãng đường không đổi, vận tốc tăng thì thời gian:", a: ["Tăng", "Giảm", "Không đổi", "Không biết"], c: 1 },
+                { q: "Xe chạy 30 km/giờ trong 3 giờ thì đi được:", a: ["60 km", "90 km", "100 km", "120 km"], c: 1 },
+                { q: "Xe chạy 20 km/giờ trong 2 giờ thì đi được:", a: ["10 km", "20 km", "40 km", "60 km"], c: 2 },
+                { q: "Xe đi 80 km trong 4 giờ, vận tốc là:", a: ["20 km/giờ", "40 km/giờ", "10 km/giờ", "80 km/giờ"], c: 0 },
+                { q: "Xe đi 90 km với vận tốc 30 km/giờ, thời gian là:", a: ["2 giờ", "3 giờ", "4 giờ", "5 giờ"], c: 1 },
+                { q: "Một xe đi với vận tốc 40 km/giờ trong 2 giờ. Quãng đường là:", a: ["20 km", "40 km", "80 km", "100 km"], c: 2 },
+                { q: "Một người đi 30 km trong 3 giờ. Vận tốc là:", a: ["5 km/giờ", "10 km/giờ", "15 km/giờ", "20 km/giờ"], c: 1 },
+                { q: "Một xe đi 60 km với vận tốc 30 km/giờ. Thời gian là:", a: ["1 giờ", "2 giờ", "3 giờ", "4 giờ"], c: 1 },
+                { q: "Xe chạy 50 km/giờ trong 3 giờ. Quãng đường là:", a: ["100 km", "120 km", "150 km", "200 km"], c: 2 },
+                { q: "Một người đi 20 km trong 4 giờ. Vận tốc là:", a: ["4 km/giờ", "5 km/giờ", "6 km/giờ", "8 km/giờ"], c: 1 },
+                { q: "Xe đi 90 km với vận tốc 45 km/giờ. Thời gian là:", a: ["1 giờ", "2 giờ", "3 giờ", "4 giờ"], c: 1 },
+                { q: "Xe chạy 60 km/giờ trong 1,5 giờ. Quãng đường là:", a: ["60 km", "70 km", "80 km", "90 km"], c: 3 },
+                { q: "1 giờ 30 phút = ? giờ", a: ["1,2 giờ", "1,3 giờ", "1,5 giờ", "1,8 giờ"], c: 2 },
+                { q: "2 giờ 30 phút = ? giờ", a: ["2,3 giờ", "2,5 giờ", "2,8 giờ", "3 giờ"], c: 1 },
+                { q: "Xe đi 100 km trong 2 giờ. Vận tốc là:", a: ["40 km/giờ", "50 km/giờ", "60 km/giờ", "70 km/giờ"], c: 1 },
+                { q: "Xe chạy 25 km/giờ trong 4 giờ. Quãng đường là:", a: ["50 km", "75 km", "100 km", "125 km"], c: 2 }
+            ],
+            van_dung: [
+                { q: "Một người đi bộ 12 km trong 3 giờ. Nếu giữ nguyên vận tốc, trong 5 giờ người đó đi được:", a: ["15 km", "18 km", "20 km", "25 km"], c: 2 },
+                { q: "Một xe đi 120 km trong 2 giờ. Hỏi trong 30 phút xe đi được bao nhiêu km?", a: ["20 km", "25 km", "30 km", "35 km"], c: 2 },
+                { q: "Một xe đi từ A đến B dài 180 km với vận tốc 60 km/giờ. Xe đến nơi lúc mấy giờ nếu xuất phát lúc 7 giờ?", a: ["9 giờ", "10 giờ", "11 giờ", "12 giờ"], c: 1 },
+                { q: "Một xe chạy 40 km/giờ trong 2 giờ, rồi chạy 60 km/giờ trong 1 giờ. Tổng quãng đường là:", a: ["100 km", "120 km", "140 km", "160 km"], c: 2 },
+                { q: "Một xe đi 90 km trong 3 giờ. Nếu đi nhanh hơn 10 km/giờ thì thời gian là:", a: ["2 giờ", "2,5 giờ", "3 giờ", "3,5 giờ"], c: 1 },
+                { q: "Một người đi bộ 6 km trong 1 giờ. Hỏi trong 20 phút đi được bao nhiêu km?", a: ["1 km", "2 km", "3 km", "4 km"], c: 1 },
+                { q: "Một xe đi 120 km trong 3 giờ. Nếu muốn đi trong 2 giờ thì cần tăng vận tốc thêm:", a: ["10 km/giờ", "20 km/giờ", "30 km/giờ", "40 km/giờ"], c: 1 },
+                { q: "Một xe đi 90 km trong 3 giờ. Nếu tăng vận tốc thêm 15 km/giờ thì thời gian còn:", a: ["1 giờ", "1,5 giờ", "2 giờ", "2,5 giờ"], c: 2 },
+                { q: "Một xe đi 100 km trong 4 giờ. Nếu đi nhanh hơn để chỉ mất 2 giờ thì vận tốc phải là:", a: ["30 km/giờ", "40 km/giờ", "50 km/giờ", "60 km/giờ"], c: 2 },
+                { q: "Một xe đi từ A đến B với vận tốc 40 km/giờ trong 3 giờ. Quãng đường AB là:", a: ["100 km", "110 km", "120 km", "130 km"], c: 2 }
+            ]
+        };
+
+        let currentQuestions = [];
+        let currentIndex = 0;
+        let score = 0;
+        let startTime;
+        let timerInterval;
+        let isMusicPlaying = false;
+        let playerName = "";
+
+        // Tạo hiệu ứng sao rơi
+        function createStars() {
+            const container = document.getElementById('stars-container');
+            for (let i = 0; i < 35; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.innerHTML = '✦'; 
+                star.style.left = Math.random() * 100 + 'vw';
+                star.style.animationDuration = (Math.random() * 5 + 7) + 's';
+                star.style.opacity = Math.random() * 0.7;
+                star.style.fontSize = (Math.random() * 15 + 10) + 'px';
+                container.appendChild(star);
+            }
+        }
+
+        function shuffle(array) {
+            return array.sort(() => Math.random() - 0.5);
+        }
+
+        function startGame() {
+            const nameInput = document.getElementById('student-name');
+            playerName = nameInput.value.trim();
+            if (!playerName) {
+                alert("Em vui lòng nhập họ tên để cô biết tên em nhé!");
+                return;
+            }
+
+            document.getElementById('display-name').innerText = playerName;
+            
+            const nb = shuffle([...KHO_DE.nhan_biet]).slice(0, 6);
+            const th = shuffle([...KHO_DE.thong_hieu]).slice(0, 6);
+            const vd = shuffle([...KHO_DE.van_dung]).slice(0, 8);
+            
+            currentQuestions = shuffle([...nb, ...th, ...vd]);
+            
+            currentIndex = 0;
+            score = 0;
+            startTime = new Date();
+
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('quiz-screen').classList.remove('hidden');
+            
+            startTimer();
+            showQuestion();
+            
+            const music = document.getElementById('bg-music');
+            music.volume = 0.3;
+            if (isMusicPlaying) music.play();
+        }
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                const now = new Date();
+                const diff = Math.floor((now - startTime) / 1000);
+                const m = Math.floor(diff / 60).toString().padStart(2, '0');
+                const s = (diff % 60).toString().padStart(2, '0');
+                document.getElementById('timer').innerText = `${m}:${s}`;
+            }, 1000);
+        }
+
+        function showQuestion() {
+            const q = currentQuestions[currentIndex];
+            document.getElementById('current-index').innerText = currentIndex + 1;
+            document.getElementById('question-text').innerText = q.q;
+            document.getElementById('progress').style.width = `${(currentIndex / 20) * 100}%`;
+
+            // Thay đổi slogan ngẫu nhiên mỗi câu hỏi
+            document.getElementById('dynamic-slogan').innerText = `"${SLOGANS[Math.floor(Math.random() * SLOGANS.length)]}"`;
+
+            const answersGrid = document.getElementById('answers-grid');
+            answersGrid.innerHTML = '';
+
+            const correctText = q.a[q.c];
+            const shuffledAnswers = shuffle([...q.a]);
+
+            shuffledAnswers.forEach((ans, idx) => {
+                const btn = document.createElement('button');
+                btn.className = "btn-answer bg-white p-4 rounded-2xl text-lg font-semibold text-gray-700 text-left flex items-center gap-3";
+                btn.innerHTML = `<span class="bg-pink-100 text-pink-600 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow-sm">${String.fromCharCode(65 + idx)}</span> ${ans}`;
+                btn.onclick = () => checkAnswer(ans, correctText);
+                answersGrid.appendChild(btn);
+            });
+        }
+
+        function checkAnswer(selected, correct) {
+            if (selected === correct) {
+                score++;
+            }
+            
+            currentIndex++;
+            if (currentIndex < 20) {
+                showQuestion();
+            } else {
+                endGame();
+            }
+        }
+
+        function endGame() {
+            clearInterval(timerInterval);
+            document.getElementById('quiz-screen').classList.add('hidden');
+            document.getElementById('result-screen').classList.remove('hidden');
+
+            const finalScore = (score * 0.5).toFixed(1);
+            const timeStr = document.getElementById('timer').innerText;
+
+            document.getElementById('final-name').innerText = playerName;
+            document.getElementById('final-score').innerText = finalScore;
+            document.getElementById('final-correct').innerText = score;
+            document.getElementById('final-time').innerText = timeStr;
+        }
+
+        function toggleMusic() {
+            const music = document.getElementById('bg-music');
+            const btn = document.getElementById('music-btn');
+            if (isMusicPlaying) {
+                music.pause();
+                btn.innerText = "🔇";
+            } else {
+                music.play().catch(() => {});
+                btn.innerText = "🔊";
+            }
+            isMusicPlaying = !isMusicPlaying;
+        }
+
+        window.onload = function() {
+            createStars();
+            // Đặt slogan khởi đầu ngẫu nhiên
+            document.getElementById('start-slogan').innerText = `"${SLOGANS[Math.floor(Math.random() * SLOGANS.length)]}"`;
+        };
+    </script>
+</body>
+</html>
