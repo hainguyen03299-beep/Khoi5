@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="vi" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+  <style>
+* { font-family: 'Baloo 2', cursive; }
+html, body { height: 100%; margin: 0; }
+
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
+@keyframes pop { 0%{transform:scale(0.5);opacity:0} 60%{transform:scale(1.15)} 100%{transform:scale(1);opacity:1} }
+@keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }
+@keyframes confetti { 0%{transform:translateY(0) rotate(0);opacity:1} 100%{transform:translateY(-200px) rotate(720deg);opacity:0} }
+@keyframes slideUp { from{transform:translateY(40px);opacity:0} to{transform:translateY(0);opacity:1} }
+@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+@keyframes starBurst { 0%{transform:scale(0) rotate(0);opacity:1} 50%{transform:scale(1.5) rotate(180deg);opacity:0.7} 100%{transform:scale(0) rotate(360deg);opacity:0} }
+
+.float { animation: float 3s ease-in-out infinite; }
+.pop { animation: pop 0.4s ease-out; }
+.shake { animation: shake 0.5s ease-out; }
+.slide-up { animation: slideUp 0.5s ease-out; }
+.pulse-anim { animation: pulse 2s ease-in-out infinite; }
+.confetti-piece { position:absolute; animation: confetti 1.5s ease-out forwards; }
+.star-burst { animation: starBurst 0.8s ease-out forwards; position:absolute; pointer-events:none; }
+
+.btn-bounce:active { transform: scale(0.95); }
+.progress-bar { transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
+
+.bg-pattern {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  position: relative;
+  overflow: hidden;
+}
+.bg-game {
+  background: linear-gradient(160deg, #0093E9 0%, #80D0C7 100%);
+}
+.bg-result {
+  background: linear-gradient(135deg, #FA8BFF 0%, #2BD2FF 52%, #2BFF88 90%);
+}
+
+.category-drag { cursor: grab; user-select: none; transition: transform 0.15s, box-shadow 0.15s; }
+.category-drag:active { cursor: grabbing; transform: scale(1.05); }
+.drop-zone { transition: background 0.2s, border-color 0.2s; min-height: 50px; }
+.drop-zone.drag-over { border-color: #fbbf24 !important; background: rgba(251,191,36,0.15) !important; }
+</style>
+  <style>body { box-sizing: border-box; }</style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+ </head>
+ <body class="h-full overflow-auto">
+  <div id="app" class="w-full h-full"></div>
+  <script>
+const defaultConfig = {
+  game_title: "Vận Tốc Vui Nhộn 🚀",
+  start_button_text: "Bắt Đầu Chơi",
+  bg_color: "#667eea",
+  surface_color: "#ffffff",
+  text_color: "#1e293b",
+  primary_action_color: "#f59e0b",
+  secondary_action_color: "#8b5cf6",
+  font_family: "Baloo 2",
+  font_size: 18
+};
+
+// Audio
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSound(type) {
+  try {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    g.gain.value = 0.15;
+    if (type === 'correct') {
+      o.type = 'sine'; o.frequency.setValueAtTime(523, audioCtx.currentTime);
+      o.frequency.setValueAtTime(659, audioCtx.currentTime + 0.1);
+      o.frequency.setValueAtTime(784, audioCtx.currentTime + 0.2);
+      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+      o.start(); o.stop(audioCtx.currentTime + 0.5);
+    } else if (type === 'wrong') {
+      o.type = 'sawtooth'; o.frequency.setValueAtTime(200, audioCtx.currentTime);
+      o.frequency.setValueAtTime(150, audioCtx.currentTime + 0.2);
+      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+      o.start(); o.stop(audioCtx.currentTime + 0.4);
+    } else if (type === 'click') {
+      o.type = 'sine'; o.frequency.value = 800;
+      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+      o.start(); o.stop(audioCtx.currentTime + 0.1);
+    } else if (type === 'win') {
+      [523,659,784,1047].forEach((f,i) => {
+        const oo = audioCtx.createOscillator(); const gg = audioCtx.createGain();
+        oo.connect(gg); gg.connect(audioCtx.destination);
+        oo.type = 'sine'; oo.frequency.value = f; gg.gain.value = 0.12;
+        gg.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3*(i+1) + 0.4);
+        oo.start(audioCtx.currentTime + 0.3*i); oo.stop(audioCtx.currentTime + 0.3*(i+1) + 0.4);
+      });
+    }
+  } catch(e) {}
+}
+
+// Ngân hàng câu hỏi lớn - 60+ câu (trộn ngẫu nhiên để chọn 25)
+const questionBank = [
+  // === NHẬN BIẾT (20 câu) ===
+  {type:'mcq', level:'🟢 Nhận biết', q:'Công thức tính vận tốc là gì? 🤔', opts:['v = s × t','v = s ÷ t','v = t ÷ s','v = s + t'], ans:1},
+  {type:'mcq', level:'🟢 Nhận biết', q:'Đơn vị nào dùng để đo vận tốc? 🏎️', opts:['km','giờ','km/giờ','km²'], ans:2},
+  {type:'mcq', level:'🟢 Nhận biết', q:'Công thức tính quãng đường là gì? 📏', opts:['s = v ÷ t','s = v × t','s = t ÷ v','s = v + t'], ans:1},
+  {type:'mcq', level:'🟢 Nhận biết', q:'Công thức tính thời gian là gì? ⏰', opts:['t = v × s','t = s + v','t = s ÷ v','t = v ÷ s'], ans:2},
+  {type:'mcq', level:'🟢 Nhận biết', q:'Nếu v = 60km/h, đơn vị "h" nghĩa là gì? 🕐', opts:['Phút','Giây','Giờ','Ngày'], ans:2},
+  {type:'mcq', level:'🟢 Nhận biết', q:'Vận tốc 5m/s nghĩa là gì? 💨', opts:['Đi 5m mỗi phút','Đi 5km mỗi giờ','Đi 5m mỗi giây','Đi 5km mỗi giây'], ans:2},
+  {type:'mcq', level:'🟢 Nhận biết', q:'Quãng đường được kí hiệu là gì? 🛣️', opts:['v','t','s','d'], ans:2},
+  {type:'mcq', level:'🟢 Nhận biết', q:'Thời gian được kí hiệu là gì? 🕰️', opts:['s','v','t','T'], ans:2},
+  {type:'mcq', level:'🟢 Nhận biết', q:'m/phút là đơn vị của gì? 📐', opts:['Quãng đường','Thời gian','Vận tốc','Tốc độ'], ans:2},
+  {type:'mcq', level:'🟢 Nhận biết', q:'Trong công thức v = s ÷ t, "t" là gì? ⏱️', opts:['Vận tốc','Quãng đường','Thời gian','Tổng'], ans:2},
+  {type:'mcq', level:'🟢 Nhận biết', q:'Đơn vị km là đơn vị của gì? 📍', opts:['Vận tốc','Thời gian','Quãng đường','Tốc độ'], ans:2},
+  {type:'mcq', level:'🟢 Nhận biết', q:'Giờ (h) là đơn vị của gì? ⏲️', opts:['Vận tốc','Quãng đường','Thời gian','Khoảng cách'], ans:2},
+  {type:'mcq', level:'🟢 Nhận biết', q:'Nếu quãng đường = 100km, thời gian = 2h. Vận tốc dùng công thức nào? 🚗', opts:['100 + 2','100 - 2','100 × 2','100 ÷ 2'], ans:3},
+  {type:'mcq', level:'🟢 Nhận biết', q:'Vận tốc 20km/giờ là gì? 🏃', opts:['Đi 20km trong 1 phút','Đi 20km trong 1 giây','Đi 20km trong 1 giờ','Đi 20km trong 1 ngày'], ans:2},
+  {type:'mcq', level:'🟢 Nhận biết', q:'Công thức nào để tìm thời gian? ⏳', opts:['t = s + v','t = s × v','t = s ÷ v','t = v - s'], ans:2},
+  {type:'mcq', level:'🟢 Nhận biết', q:'Đơn vị m/s là gì? 🎯', opts:['Mét trên giây','Mét trên phút','Mét trên giờ','Mét trên ngày'], ans:0},
+  {type:'classify', level:'🟢 Nhận biết', q:'Phân loại các đại lượng sau vào đúng nhóm! 📦',
+    items:['km','giờ','km/giờ','m','phút','m/phút'],
+    categories:['Quãng đường','Thời gian','Vận tốc'],
+    correctMap:{'km':'Quãng đường','giờ':'Thời gian','km/giờ':'Vận tốc','m':'Quãng đường','phút':'Thời gian','m/phút':'Vận tốc'}},
+  {type:'classify', level:'🟢 Nhận biết', q:'Phân loại đơn vị theo đại lượng! 🔤',
+    items:['km','m/s','phút','s','km/h','giờ'],
+    categories:['Quãng đường','Vận tốc','Thời gian'],
+    correctMap:{'km':'Quãng đường','m/s':'Vận tốc','phút':'Thời gian','s':'Thời gian','km/h':'Vận tốc','giờ':'Thời gian'}},
+  {type:'classify', level:'🟢 Nhận biết', q:'Chọn kí hiệu đúng cho mỗi đại lượng! 🏷️',
+    items:['Vận tốc','Quãng đường','Thời gian','Giờ'],
+    categories:['v','s','t','h'],
+    correctMap:{'Vận tốc':'v','Quãng đường':'s','Thời gian':'t','Giờ':'h'}},
+
+  // === THÔNG HIỂU (20 câu) ===
+  {type:'mcq', level:'🟡 Thông hiểu', q:'Ô tô đi 120km trong 2 giờ. Vận tốc là bao nhiêu? 🚗', opts:['40 km/h','50 km/h','60 km/h','80 km/h'], ans:2},
+  {type:'mcq', level:'🟡 Thông hiểu', q:'Xe đạp có v = 15km/h, đi trong 3 giờ. Quãng đường? 🚲', opts:['30 km','45 km','50 km','60 km'], ans:1},
+  {type:'mcq', level:'🟡 Thông hiểu', q:'Đi bộ quãng đường 6km, vận tốc 4km/h. Thời gian? 🚶', opts:['1 giờ','1,5 giờ','2 giờ','2,5 giờ'], ans:1},
+  {type:'mcq', level:'🟡 Thông hiểu', q:'Xe máy đi 90km trong 1,5 giờ. Vận tốc? 🏍️', opts:['50 km/h','55 km/h','60 km/h','65 km/h'], ans:2},
+  {type:'mcq', level:'🟡 Thông hiểu', q:'240m trong 40 giây. Vận tốc bao nhiêu m/s? ⚡', opts:['4 m/s','5 m/s','6 m/s','8 m/s'], ans:2},
+  {type:'mcq', level:'🟡 Thông hiểu', q:'v = 50km/h, t = 4 giờ. Quãng đường? 🛣️', opts:['150 km','180 km','200 km','250 km'], ans:2},
+  {type:'mcq', level:'🟡 Thông hiểu', q:'Chim bay 1500m trong 5 phút. Vận tốc m/phút? 🐦', opts:['200 m/phút','250 m/phút','300 m/phút','350 m/phút'], ans:2},
+  {type:'mcq', level:'🟡 Thông hiểu', q:'Quãng đường 100km, thời gian 2,5h. Vận tốc? 🚙', opts:['30 km/h','35 km/h','40 km/h','45 km/h'], ans:2},
+  {type:'mcq', level:'🟡 Thông hiểu', q:'Vận tốc 60km/h, thời gian 1,5h. Quãng đường? 🏎️', opts:['80 km','90 km','100 km','120 km'], ans:1},
+  {type:'mcq', level:'🟡 Thông hiểu', q:'Quãng đường 400m, vận tốc 20m/s. Thời gian? ⏱️', opts:['15 giây','20 giây','25 giây','30 giây'], ans:1},
+  {type:'mcq', level:'🟡 Thông hiểu', q:'300km trong 5 giờ. Vận tốc trung bình? 🛤️', opts:['50 km/h','55 km/h','60 km/h','65 km/h'], ans:2},
+  {type:'mcq', level:'🟡 Thông hiểu', q:'Chuyến đi: v=75km/h, t=4h. Quãng đường? 🚕', opts:['250 km','275 km','300 km','325 km'], ans:2},
+  {type:'classify', level:'🟡 Thông hiểu', q:'Phân loại công thức theo đại lượng cần tìm! 🧩',
+    items:['s ÷ t','v × t','s ÷ v'],
+    categories:['Tìm vận tốc','Tìm quãng đường','Tìm thời gian'],
+    correctMap:{'s ÷ t':'Tìm vận tốc','v × t':'Tìm quãng đường','s ÷ v':'Tìm thời gian'}},
+  {type:'classify', level:'🟡 Thông hiểu', q:'Phân loại đơn vị phù hợp cho từng đại lượng! 📐',
+    items:['m/s','km','giây','km/giờ','m','giờ'],
+    categories:['Vận tốc','Quãng đường','Thời gian'],
+    correctMap:{'m/s':'Vận tốc','km':'Quãng đường','giây':'Thời gian','km/giờ':'Vận tốc','m':'Quãng đường','giờ':'Thời gian'}},
+  {type:'mcq', level:'🟡 Thông hiểu', q:'200m trong 8 giây. Vận tốc m/s? 🏃', opts:['20 m/s','25 m/s','30 m/s','35 m/s'], ans:2},
+  {type:'mcq', level:'🟡 Thông hiểu', q:'v=30km/h, s=60km. Thời gian? ⏰', opts:['1 giờ','1,5 giờ','2 giờ','2,5 giờ'], ans:2},
+  {type:'mcq', level:'🟡 Thông hiểu', q:'500m trong 25 phút. Vận tốc m/phút? 🚶', opts:['15 m/phút','20 m/phút','25 m/phút','30 m/phút'], ans:1},
+  {type:'mcq', level:'🟡 Thông hiểu', q:'v=72km/h, t=3h. s=? 🚂', opts:['180 km','200 km','216 km','240 km'], ans:2},
+
+  // === VẬN DỤNG (20+ câu) ===
+  {type:'mcq', level:'🔴 Vận dụng', q:'Hai thành phố cách 180km. Ô tô đi v=60km/h. Mấy giờ đến? 🏙️', opts:['2 giờ','2,5 giờ','3 giờ','3,5 giờ'], ans:2},
+  {type:'mcq', level:'🔴 Vận dụng', q:'Bạn An chạy 100m hết 20 giây. Vận tốc m/phút? 🏃', opts:['200 m/phút','250 m/phút','300 m/phút','350 m/phút'], ans:2},
+  {type:'mcq', level:'🔴 Vận dụng', q:'Xe lửa đi từ 7h sáng, v=80km/h. Đến 10h sáng đi được? 🚂', opts:['160 km','200 km','240 km','320 km'], ans:2},
+  {type:'mcq', level:'🔴 Vận dụng', q:'Bạn Minh đạp xe 12km hết 40 phút. Vận tốc km/h? 🚴', opts:['15 km/h','16 km/h','18 km/h','20 km/h'], ans:2},
+  {type:'mcq', level:'🔴 Vận dụng', q:'Ca nô đi 36km/h. Đổi ra m/phút? 🚤', opts:['500 m/phút','600 m/phút','700 m/phút','800 m/phút'], ans:1},
+  {type:'mcq', level:'🔴 Vận dụng', q:'Ô tô đi nửa quãng đường 200km hết 2h. v toàn bộ? 🚙', opts:['40 km/h','45 km/h','50 km/h','55 km/h'], ans:2},
+  {type:'mcq', level:'🔴 Vận dụng', q:'Xe buýt khởi hành 6h30, đến 9h. v=40km/h. Quãng đường? 🚌', opts:['80 km','90 km','100 km','120 km'], ans:2},
+  {type:'classify', level:'🔴 Vận dụng', q:'Phân loại bài toán theo dạng tìm gì! 🎯',
+    items:['Đi 60km hết 2h, tìm v?','v=40km/h, t=3h, tìm s?','s=100km, v=50km/h, tìm t?'],
+    categories:['Tìm vận tốc','Tìm quãng đường','Tìm thời gian'],
+    correctMap:{'Đi 60km hết 2h, tìm v?':'Tìm vận tốc','v=40km/h, t=3h, tìm s?':'Tìm quãng đường','s=100km, v=50km/h, tìm t?':'Tìm thời gian'}},
+  {type:'classify', level:'🔴 Vận dụng', q:'Phân loại vận tốc nhanh hay chậm (so với 50km/h)! 🏁',
+    items:['60 km/h','30 km/h','80 km/h','45 km/h'],
+    categories:['Nhanh hơn 50km/h','Chậm hơn 50km/h'],
+    correctMap:{'60 km/h':'Nhanh hơn 50km/h','30 km/h':'Chậm hơn 50km/h','80 km/h':'Nhanh hơn 50km/h','45 km/h':'Chậm hơn 50km/h'}},
+  {type:'mcq', level:'🔴 Vận dụng', q:'Khách du lịch đi 24km hết 4 giờ. Vận tốc km/h? 🏔️', opts:['4 km/h','5 km/h','6 km/h','8 km/h'], ans:2},
+  {type:'mcq', level:'🔴 Vận dụng', q:'Máy bay bay 800km/h. Trong 2 giờ bay được bao xa? ✈️', opts:['1200 km','1400 km','1600 km','1800 km'], ans:2},
+  {type:'mcq', level:'🔴 Vận dụng', q:'Bơi 600m hết 12 phút. Vận tốc m/phút? 🏊', opts:['40 m/phút','50 m/phút','60 m/phút','80 m/phút'], ans:2},
+  {type:'mcq', level:'🔴 Vận dụng', q:'Chạy từ 7h30 đến 8h15, v=12km/h. Chạy được? 🏃', opts:['6 km','7 km','8 km','9 km'], ans:0},
+  {type:'mcq', level:'🔴 Vận dụng', q:'Tàu hỏa 480km trong 8 giờ. Vận tốc? 🚄', opts:['50 km/h','60 km/h','70 km/h','80 km/h'], ans:1},
+  {type:'classify', level:'🔴 Vận dụng', q:'Phân loại phương tiện theo vận tốc (cao-trung bình-thấp)! 🚛',
+    items:['Ô tô 60km/h','Đi bộ 5km/h','Máy bay 600km/h','Xe đạp 15km/h'],
+    categories:['Vận tốc cao','Vận tốc trung bình','Vận tốc thấp'],
+    correctMap:{'Ô tô 60km/h':'Vận tốc trung bình','Đi bộ 5km/h':'Vận tốc thấp','Máy bay 600km/h':'Vận tốc cao','Xe đạp 15km/h':'Vận tốc thấp'}},
+];
+
+// Hàm xáo trộn mảng
+function shuffleArray(arr) {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+// Hàm xáo trộn đáp án cho câu trắc nghiệm
+function shuffleOptions(question) {
+  const q = {...question};
+  if (q.type === 'mcq') {
+    const optionsWithIndex = q.opts.map((opt, idx) => ({opt, idx}));
+    const shuffled = shuffleArray(optionsWithIndex);
+    q.opts = shuffled.map(item => item.opt);
+    // Cập nhật chỉ số câu đúng
+    q.ans = shuffled.findIndex(item => item.idx === question.ans);
+  }
+  return q;
+}
+
+// Chọn 25 câu ngẫu nhiên từ ngân hàng và xáo trộn đáp án
+function getRandomQuestions() {
+  const shuffled = shuffleArray(questionBank);
+  const selected = shuffled.slice(0, 25);
+  return selected.map(q => shuffleOptions(q));
+}
+
+let questions = getRandomQuestions();
+
+let currentQ = 0, score = 0, answered = [];
+let screen = 'home'; // home, how, game, result
+
+function getConfig() {
+  const c = window.elementSdk?.config || {};
+  return {
+    game_title: c.game_title || defaultConfig.game_title,
+    start_button_text: c.start_button_text || defaultConfig.start_button_text,
+    bg_color: c.bg_color || defaultConfig.bg_color,
+    surface_color: c.surface_color || defaultConfig.surface_color,
+    text_color: c.text_color || defaultConfig.text_color,
+    primary_action_color: c.primary_action_color || defaultConfig.primary_action_color,
+    secondary_action_color: c.secondary_action_color || defaultConfig.secondary_action_color,
+    font_family: c.font_family || defaultConfig.font_family,
+    font_size: c.font_size || defaultConfig.font_size
+  };
+}
+
+function render() {
+  const c = getConfig();
+  const app = document.getElementById('app');
+  const ff = `${c.font_family}, 'Baloo 2', cursive`;
+  const bs = c.font_size;
+
+  if (screen === 'home') {
+    app.innerHTML = `
+    <div class="w-full h-full bg-pattern flex flex-col items-center justify-center p-4 overflow-auto" style="font-family:${ff}">
+      <div class="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+        <div class="absolute text-6xl float" style="top:8%;left:8%;animation-delay:0s">🚗</div>
+        <div class="absolute text-5xl float" style="top:15%;right:10%;animation-delay:0.5s">✈️</div>
+        <div class="absolute text-6xl float" style="bottom:20%;left:12%;animation-delay:1s">🚀</div>
+        <div class="absolute text-5xl float" style="bottom:12%;right:8%;animation-delay:1.5s">🚲</div>
+        <div class="absolute text-4xl float" style="top:40%;left:3%;animation-delay:0.7s">⏱️</div>
+        <div class="absolute text-4xl float" style="top:35%;right:5%;animation-delay:1.2s">📏</div>
+        <div class="absolute text-5xl float" style="bottom:35%;right:15%;animation-delay:0.3s">🏎️</div>
+      </div>
+      <div class="relative z-10 text-center slide-up">
+        <div class="text-7xl mb-4">🚀</div>
+        <h1 id="homeTitle" class="text-white font-extrabold mb-3 drop-shadow-lg" style="font-size:${bs*2.5}px">${c.game_title}</h1>
+        <p class="text-white/90 mb-8 max-w-md mx-auto" style="font-size:${bs}px">Cùng khám phá thế giới vận tốc, quãng đường và thời gian nhé! 🌟 25 câu hỏi thú vị đang chờ bạn!</p>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          <button onclick="startGame()" class="btn-bounce px-8 py-4 rounded-2xl font-bold text-xl shadow-xl hover:shadow-2xl transition-all pulse-anim" style="background:${c.primary_action_color};color:#fff;font-size:${bs*1.3}px">
+            🎮 ${c.start_button_text}
+          </button>
+          <button onclick="showHow()" class="btn-bounce px-8 py-4 rounded-2xl font-bold text-xl shadow-xl hover:shadow-2xl transition-all" style="background:${c.secondary_action_color};color:#fff;font-size:${bs*1.1}px">
+            📖 Cách Chơi
+          </button>
+        </div>
+        <div class="mt-8 flex gap-3 justify-center flex-wrap">
+          <span class="bg-white/20 text-white px-3 py-1 rounded-full text-sm">🟢 Nhận biết</span>
+          <span class="bg-white/20 text-white px-3 py-1 rounded-full text-sm">🟡 Thông hiểu</span>
+          <span class="bg-white/20 text-white px-3 py-1 rounded-full text-sm">🔴 Vận dụng</span>
+        </div>
+      </div>
+    </div>`;
+  } else if (screen === 'how') {
+    app.innerHTML = `
+    <div class="w-full h-full bg-pattern flex items-center justify-center p-4 overflow-auto" style="font-family:${ff}">
+      <div class="rounded-3xl shadow-2xl p-8 max-w-lg w-full slide-up" style="background:${c.surface_color};color:${c.text_color}">
+        <h2 class="font-bold text-center mb-6" style="font-size:${bs*1.8}px">📖 Cách Chơi</h2>
+        <div class="space-y-4" style="font-size:${bs}px">
+          <div class="flex gap-3 items-start"><span class="text-2xl">🎯</span><p><b>Trắc nghiệm:</b> Chọn 1 đáp án đúng trong 4 phương án.</p></div>
+          <div class="flex gap-3 items-start"><span class="text-2xl">📦</span><p><b>Phân loại:</b> Kéo thả các mục vào đúng nhóm, rồi nhấn "Kiểm tra".</p></div>
+          <div class="flex gap-3 items-start"><span class="text-2xl">⭐</span><p><b>Điểm số:</b> Tổng 10 điểm cho 25 câu. Mỗi câu đúng được 0.4 điểm.</p></div>
+          <div class="flex gap-3 items-start"><span class="text-2xl">🏆</span><p><b>Mục tiêu:</b> Trả lời đúng càng nhiều càng tốt!</p></div>
+          <div class="flex gap-3 items-start"><span class="text-2xl">🔊</span><p><b>Âm thanh:</b> Có hiệu ứng âm thanh khi trả lời đúng/sai.</p></div>
+        </div>
+        <div class="text-center mt-6">
+          <button onclick="goHome()" class="btn-bounce px-6 py-3 rounded-2xl font-bold text-white shadow-lg" style="background:${c.secondary_action_color};font-size:${bs*1.1}px">⬅️ Quay lại</button>
+        </div>
+      </div>
+    </div>`;
+  } else if (screen === 'game') {
+    renderGame(c, ff, bs);
+  } else if (screen === 'result') {
+    renderResult(c, ff, bs);
+  }
+  lucide.createIcons();
+}
+
+function renderGame(c, ff, bs) {
+  const app = document.getElementById('app');
+  const q = questions[currentQ];
+  const progress = ((currentQ) / questions.length) * 100;
+  const isAnswered = answered[currentQ] !== undefined;
+
+  let qContent = '';
+  if (q.type === 'mcq') {
+    qContent = q.opts.map((o, i) => {
+      let cls = `w-full text-left px-5 py-4 rounded-2xl font-semibold transition-all border-2 `;
+      let extra = '';
+      if (isAnswered) {
+        if (i === q.ans) cls += 'border-green-400 bg-green-50 text-green-800';
+        else if (i === answered[currentQ] && i !== q.ans) cls += 'border-red-400 bg-red-50 text-red-800 shake';
+        else cls += 'border-gray-200 bg-gray-50 text-gray-400 opacity-60';
+        extra = 'pointer-events-none';
+      } else {
+        cls += `border-gray-200 hover:border-amber-400 hover:shadow-md cursor-pointer`;
+        extra = `onclick="answerMCQ(${i})"`;
+      }
+      const icon = isAnswered ? (i === q.ans ? '✅' : (i === answered[currentQ] ? '❌' : '⚪')) : ['🅰️','🅱️','©️','🅳'][i] || '⭕';
+      return `<button class="${cls} btn-bounce" style="font-size:${bs}px;font-family:${ff}" ${extra}>${icon} ${o}</button>`;
+    }).join('');
+  } else {
+    // Classify
+    const placed = answered[currentQ]?.placed || {};
+    const checked = answered[currentQ]?.checked || false;
+    const remainingItems = q.items.filter(it => !Object.values(placed).flat().includes(it));
+
+    let itemsHtml = checked ? '' : `<div class="flex flex-wrap gap-2 mb-4 min-h-[40px] justify-center" id="itemPool">
+      ${remainingItems.map(it => `<div class="category-drag px-3 py-2 rounded-xl font-semibold text-sm shadow" style="background:${c.primary_action_color};color:#fff;font-size:${bs*0.85}px" draggable="true" ondragstart="dragStart(event,'${encodeURIComponent(it)}')" onclick="tapItem(this,'${encodeURIComponent(it)}')">${it}</div>`).join('')}
+    </div>`;
+
+    let catsHtml = q.categories.map(cat => {
+      const catItems = placed[cat] || [];
+      let borderColor = '#e5e7eb';
+      if (checked) {
+        const allCorrect = catItems.every(it => q.correctMap[it] === cat) && catItems.length > 0;
+        borderColor = allCorrect ? '#22c55e' : '#ef4444';
+      }
+      return `<div class="rounded-2xl border-2 p-3 mb-3 drop-zone" style="border-color:${borderColor};background:${c.surface_color}20"
+        ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')"
+        ondrop="dropItem(event,this,'${encodeURIComponent(cat)}')">
+        <div class="font-bold text-sm mb-2" style="color:${c.secondary_action_color};font-size:${bs*0.85}px">${cat}</div>
+        <div class="flex flex-wrap gap-1 min-h-[32px]" id="cat_${encodeURIComponent(cat)}">
+          ${catItems.map(it => {
+            let itColor = c.primary_action_color;
+            if (checked) itColor = q.correctMap[it] === cat ? '#22c55e' : '#ef4444';
+            return `<div class="px-2 py-1 rounded-lg text-white text-xs font-semibold ${checked?'':'cursor-pointer'}" style="background:${itColor};font-size:${bs*0.75}px" ${checked?'':`onclick="removeFromCat('${encodeURIComponent(it)}','${encodeURIComponent(cat)}')"`}>${it} ${checked?(q.correctMap[it]===cat?'✅':'❌'):''}</div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }).join('');
+
+    let checkBtn = '';
+    if (!checked && remainingItems.length === 0) {
+      checkBtn = `<button onclick="checkClassify()" class="btn-bounce w-full py-3 rounded-2xl font-bold text-white shadow-lg mt-2" style="background:${c.primary_action_color};font-size:${bs}px">✅ Kiểm tra</button>`;
+    }
+    if (checked) {
+      const allCorrect = q.items.every(it => placed[q.correctMap[it]]?.includes(it));
+      checkBtn = `<div class="text-center py-2 font-bold ${allCorrect?'text-green-600':'text-red-500'}" style="font-size:${bs}px">${allCorrect?'🎉 Chính xác!':'😅 Chưa đúng hết rồi!'}</div>`;
+    }
+
+    qContent = itemsHtml + catsHtml + checkBtn;
+  }
+
+  const nextDisabled = !isAnswered && !(answered[currentQ]?.checked);
+  app.innerHTML = `
+  <div class="w-full h-full bg-game flex flex-col p-3 overflow-auto" style="font-family:${ff}">
+    <div class="flex items-center justify-between mb-2 gap-2">
+      <button onclick="goHome()" class="btn-bounce text-white/80 hover:text-white p-2"><i data-lucide="home" style="width:24px;height:24px"></i></button>
+      <div class="flex-1 bg-white/30 rounded-full h-4 overflow-hidden">
+        <div class="progress-bar h-full rounded-full" style="width:${progress}%;background:${c.primary_action_color}"></div>
+      </div>
+      <div class="text-white font-bold whitespace-nowrap" style="font-size:${bs*0.85}px">⭐ ${(score*0.4).toFixed(1)}/10</div>
+    </div>
+    <div class="text-white/80 text-center mb-2" style="font-size:${bs*0.8}px">Câu ${currentQ+1}/${questions.length} · ${q.level}</div>
+    <div class="flex-1 flex items-start justify-center">
+      <div class="rounded-3xl shadow-2xl p-5 w-full max-w-lg slide-up" style="background:${c.surface_color};color:${c.text_color}">
+        <h3 class="font-bold mb-4 leading-relaxed" style="font-size:${bs*1.15}px">${q.q}</h3>
+        <div class="space-y-3">${qContent}</div>
+        ${(isAnswered || answered[currentQ]?.checked) ? `
+        <button onclick="nextQ()" class="btn-bounce w-full mt-4 py-3 rounded-2xl font-bold text-white shadow-lg" style="background:${c.secondary_action_color};font-size:${bs}px">
+          ${currentQ < questions.length - 1 ? 'Câu tiếp theo ➡️' : 'Xem kết quả 🏆'}
+        </button>` : ''}
+      </div>
+    </div>
+  </div>`;
+  lucide.createIcons();
+}
+
+function renderResult(c, ff, bs) {
+  const app = document.getElementById('app');
+  const finalScore = (score * 0.4).toFixed(1);
+  let emoji, msg;
+  if (finalScore >= 9) { emoji = '🏆'; msg = 'Xuất sắc! Bạn là thiên tài!'; }
+  else if (finalScore >= 7) { emoji = '🌟'; msg = 'Giỏi lắm! Bạn rất tuyệt vời!'; }
+  else if (finalScore >= 5) { emoji = '👍'; msg = 'Khá tốt! Cố gắng thêm nhé!'; }
+  else { emoji = '💪'; msg = 'Hãy ôn lại và thử lại nhé!'; }
+
+  app.innerHTML = `
+  <div class="w-full h-full bg-result flex items-center justify-center p-4 overflow-auto" style="font-family:${ff}">
+    <div id="confettiContainer" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+    <div class="relative z-10 rounded-3xl shadow-2xl p-8 max-w-md w-full text-center pop" style="background:${c.surface_color};color:${c.text_color}">
+      <div class="text-8xl mb-4">${emoji}</div>
+      <h2 class="font-extrabold mb-2" style="font-size:${bs*2}px">Hoàn thành!</h2>
+      <p class="mb-4" style="font-size:${bs*1.2}px">${msg}</p>
+      <div class="rounded-2xl p-6 mb-6" style="background:${c.bg_color}20">
+        <div class="font-extrabold" style="font-size:${bs*3}px;color:${c.primary_action_color}">${finalScore}/10</div>
+        <p style="font-size:${bs*0.9}px">Đúng ${score}/${questions.length} câu</p>
+      </div>
+      <div class="flex gap-3 justify-center flex-wrap">
+        <button onclick="startGame()" class="btn-bounce px-6 py-3 rounded-2xl font-bold text-white shadow-lg" style="background:${c.primary_action_color};font-size:${bs*1.1}px">🔄 Chơi lại</button>
+        <button onclick="goHome()" class="btn-bounce px-6 py-3 rounded-2xl font-bold text-white shadow-lg" style="background:${c.secondary_action_color};font-size:${bs*1.1}px">🏠 Trang chủ</button>
+      </div>
+    </div>
+  </div>`;
+
+  // Confetti
+  playSound('win');
+  const container = document.getElementById('confettiContainer');
+  const emojis = ['🎉','🎊','⭐','🌟','💫','🎈','🎆','✨'];
+  for (let i = 0; i < 30; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    el.style.left = Math.random()*100+'%';
+    el.style.bottom = '-20px';
+    el.style.fontSize = (20+Math.random()*20)+'px';
+    el.style.animationDelay = Math.random()*1+'s';
+    el.style.animationDuration = (1+Math.random()*1.5)+'s';
+    el.textContent = emojis[Math.floor(Math.random()*emojis.length)];
+    container.appendChild(el);
+  }
+}
+
+// Game logic
+let selectedItem = null;
+
+window.startGame = function() {
+  playSound('click');
+  currentQ = 0; score = 0; answered = [];
+  screen = 'game'; render();
+};
+window.goHome = function() { playSound('click'); screen = 'home'; render(); };
+window.showHow = function() { playSound('click'); screen = 'how'; render(); };
+
+window.answerMCQ = function(i) {
+  const q = questions[currentQ];
+  answered[currentQ] = i;
+  if (i === q.ans) { score++; playSound('correct'); }
+  else { playSound('wrong'); }
+  render();
+};
+
+window.nextQ = function() {
+  playSound('click');
+  if (currentQ < questions.length - 1) { currentQ++; screen = 'game'; }
+  else { screen = 'result'; }
+  render();
+};
+
+// Classify drag/drop + tap
+window.dragStart = function(e, item) {
+  e.dataTransfer.setData('text', item);
+};
+window.dropItem = function(e, el, cat) {
+  e.preventDefault();
+  el.classList.remove('drag-over');
+  const item = decodeURIComponent(e.dataTransfer.getData('text'));
+  addToCat(item, decodeURIComponent(cat));
+};
+window.tapItem = function(el, encodedItem) {
+  const item = decodeURIComponent(encodedItem);
+  const q = questions[currentQ];
+  // Add to first non-full category
+  for (const cat of q.categories) {
+    const placed = answered[currentQ]?.placed || {};
+    const catItems = placed[cat] || [];
+    addToCat(item, cat);
+    return;
+  }
+};
+window.removeFromCat = function(encodedItem, encodedCat) {
+  const item = decodeURIComponent(encodedItem);
+  const cat = decodeURIComponent(encodedCat);
+  if (!answered[currentQ]) return;
+  const placed = answered[currentQ].placed;
+  if (placed[cat]) {
+    placed[cat] = placed[cat].filter(i => i !== item);
+  }
+  render();
+};
+
+function addToCat(item, cat) {
+  if (!answered[currentQ]) answered[currentQ] = { placed: {}, checked: false };
+  const placed = answered[currentQ].placed;
+  // Remove from other categories first
+  for (const c of questions[currentQ].categories) {
+    if (placed[c]) placed[c] = placed[c].filter(i => i !== item);
+  }
+  if (!placed[cat]) placed[cat] = [];
+  if (!placed[cat].includes(item)) placed[cat].push(item);
+  playSound('click');
+  render();
+}
+
+window.checkClassify = function() {
+  const q = questions[currentQ];
+  const placed = answered[currentQ].placed;
+  answered[currentQ].checked = true;
+  const allCorrect = q.items.every(it => placed[q.correctMap[it]]?.includes(it));
+  if (allCorrect) { score++; playSound('correct'); }
+  else { playSound('wrong'); }
+  render();
+};
+
+// Element SDK
+window.elementSdk.init({
+  defaultConfig,
+  onConfigChange: async (config) => { render(); },
+  mapToCapabilities: (config) => ({
+    recolorables: [
+      { get:()=>config.bg_color||defaultConfig.bg_color, set:(v)=>{config.bg_color=v;window.elementSdk.setConfig({bg_color:v})} },
+      { get:()=>config.surface_color||defaultConfig.surface_color, set:(v)=>{config.surface_color=v;window.elementSdk.setConfig({surface_color:v})} },
+      { get:()=>config.text_color||defaultConfig.text_color, set:(v)=>{config.text_color=v;window.elementSdk.setConfig({text_color:v})} },
+      { get:()=>config.primary_action_color||defaultConfig.primary_action_color, set:(v)=>{config.primary_action_color=v;window.elementSdk.setConfig({primary_action_color:v})} },
+      { get:()=>config.secondary_action_color||defaultConfig.secondary_action_color, set:(v)=>{config.secondary_action_color=v;window.elementSdk.setConfig({secondary_action_color:v})} },
+    ],
+    borderables: [],
+    fontEditable: { get:()=>config.font_family||defaultConfig.font_family, set:(v)=>{config.font_family=v;window.elementSdk.setConfig({font_family:v})} },
+    fontSizeable: { get:()=>config.font_size||defaultConfig.font_size, set:(v)=>{config.font_size=v;window.elementSdk.setConfig({font_size:v})} },
+  }),
+  mapToEditPanelValues: (config) => new Map([
+    ["game_title", config.game_title || defaultConfig.game_title],
+    ["start_button_text", config.start_button_text || defaultConfig.start_button_text],
+  ])
+});
+
+render();
+</script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9e8ee5e885f497ac',t:'MTc3NTYyNjQxNS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
